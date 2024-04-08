@@ -38,6 +38,17 @@ def plot_scatter_timesteps_per_id(df, variables):
     plt.title('Timestep Count per ID')
     plt.savefig('timestep_count_per_id.png')
 
+def aggragete_boolenas_per_day_per_id(df, variables):
+    id_list = get_id(df)
+    variable_list = get_variables(df, variables)
+    for id in id_list:
+        for variable in variables:
+            df[(df['id'] == id) & (df['variable'] == variable)].groupby('time').agg('value')
+
+def count_nan_values(df):
+    nan_values = df.isna().sum()
+    return nan_values
+
 def prepare_data_for_correlation(df):
     df_wide = df.pivot_table(index=['id', 'time'], columns='variable', values='value')
     df_wide.reset_index(inplace=True)
@@ -57,6 +68,7 @@ def create_correlation_matrix(df_wide):
 
 
 if __name__ == '__main__':
-    wide_df = prepare_data_for_correlation(df)
-    wide_df.to_csv('wide_df.csv', index=False)
-    create_correlation_matrix(wide_df)
+    #wide_df = prepare_data_for_correlation(df)
+    #wide_df.to_csv('wide_df.csv', index=False)
+    #create_correlation_matrix(wide_df)
+    print(count_nan_values(df))
