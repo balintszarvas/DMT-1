@@ -159,8 +159,8 @@ def average_through_ids():
     df = df.groupby('date').agg('mean').reset_index()
     df.to_csv('daily_aggregate_avg.csv', index=False)
     
-def normalized_data():
-    """Normalize the data"""
+def normalised_data():
+    """Normalise the data"""
     df = pd.read_csv('daily_aggregate_avg.csv')
 
     date_column = df['date']
@@ -174,11 +174,11 @@ def normalized_data():
 
     df = (df - mean) / std
     df = pd.concat([date_column, df], axis=1)
-    df.to_csv('daily_aggregate_normalized.csv', index=False)
+    df.to_csv('daily_aggregate_normalised.csv', index=False)
     
 def correlation_matrix():
     """Create a correlation matrix"""
-    df = pd.read_csv('daily_aggregate_normalized.csv')
+    df = pd.read_csv('daily_aggregate_normalised.csv')
     df.drop(['date'], axis=1, inplace=True)
     corr = df.corr()
     labels = [label.replace('appCat.', '') for label in corr.columns.values]
@@ -188,11 +188,11 @@ def correlation_matrix():
                 xticklabels=labels,
                 yticklabels=labels)
     plt.tight_layout()
-    plt.savefig('correlation_matrix_normalized.png')
+    plt.savefig('correlation_matrix_normalised.png')
     
 def box_plot_variables():
     """Create a box plot for variables"""
-    df = pd.read_csv('daily_aggregate_normalized.csv')
+    df = pd.read_csv('daily_aggregate_normalised.csv')
     sns.set(style="whitegrid")
     plt.figure(figsize=(10, 6))
     sns.boxplot(data=df)
@@ -207,6 +207,6 @@ if __name__ == '__main__':
     #wide_df.to_csv('wide_df.csv', index=False)
     #create_correlation_matrix(wide_df)
     #average_through_ids()
-    normalized_data()
+    normalised_data()
     correlation_matrix()
     box_plot_variables()
