@@ -1,0 +1,1 @@
+isna().sum().sum()
