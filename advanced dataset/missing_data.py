@@ -30,12 +30,15 @@ class Missing_data():
 
             - df_or: Copy of the original Dataframe
         """
-
+        
+        df = pd.read_csv('C:/Users/joann/OneDrive/Escritorio/Intro/DMT-1/dataset_mood_smartphone.csv')
+        df = df.drop('Unnamed: 0', axis = 1)
+        df[['day', 'time']] = df['time'].str.split(' ', expand=True)
         self.df = df
-
         self.df_or = df.copy()
         self.nan_var = None
         self.nan_count = None
+        self.ids = self.df['id'].unique() 
 
 
     def nan_finder(self):
@@ -53,13 +56,11 @@ class Missing_data():
     def moving_average(self):
         """ 
 
-        Given the data frame, fills the columns that are empty with the ID moving averaeg
+        Given the data frame, fills the columns that are empty with the ID moving average
         """
-        self.nan_finder()
+        self.nan_finder()  
 
-        ids = self.df['id'].unique()     
-
-        for i_d in ids:
+        for i_d in self.ids:
             for var in self.nan_var:
                 data = df[(df['id'] == i_d) & (df['variable'] == var)]['value']
                 
@@ -70,6 +71,29 @@ class Missing_data():
                 for i,pos in enumerate(nan_positions[0]):
                     mean = data[:pos].mean()
                     self.df.loc[nan_index[i],'value'] = mean
+        
+        miss_df.nan_finder()
+        miss_df.df.loc[miss_df.nan_indices[0],'value'] = 0
+
+    def plotter(self,var):
+        """
+        PLots the evolution of a dataset overtime of one variable.
+        Inputs:
+            - Variable: Variable to plot
+        """
+        for id_ in self.ids:
+            
+            data_id = self.df[self.df['id'] == id_]
+            
+            plt.figure(figsize=(10, 6))
+            plt.plot(data_id['time'], data_id[data_id['variable'] == var]['values'], label=f'ID {id_}')
+    
+            plt.title(f'{var} Over Time (ID {id_})')
+            plt.xlabel('Time')
+            plt.ylabel('Values')
+            plt.legend()
+            plt.grid(True)
+            plt.show()
             
 
     def reset(self):
@@ -102,30 +126,18 @@ class Missing_data():
             self.reset()
 
 
-
-
-
-
 if __name__ == '__main__':
 
-    df = pd.read_csv('C:/Users/joann/OneDrive/Escritorio/Intro/DMT-1/dataset_mood_smartphone.csv')
+    df = pd.read_csv('../DMT-1/dataset_mood_smartphone.csv')
     df = df.drop('Unnamed: 0', axis = 1)
     df[['day', 'time']] = df['time'].str.split(' ', expand=True)
-    variables = df['variable'].unique()
-    ids = df['id'].unique()
-    days = df['day'].unique()
-    times = df['time'].unique()
+ 
+
     miss_df = Missing_data(df)
     miss_df.nan_finder()
 
     miss_df.moving_average()
 
-    miss_df.save(name = 'average_missing_values.csv')
-
-    miss_df.nan_finder()
-    index = miss_df.nan_indices[0]
-    print(df.loc[index])
-    print(df.loc[index - 1])
     
 
 
