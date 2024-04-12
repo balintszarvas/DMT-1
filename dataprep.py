@@ -150,18 +150,35 @@ def make_daily_aggragate_csv():
     df_real = df_real.groupby(['id', 'date', 'variable']).agg({'value': 'mean'}).reset_index()
     df_aggregate = pd.concat([df_boolean, df_real])
     df_aggregate = df_aggregate.pivot_table(index=['id', 'date'], columns='variable', values='value').reset_index()
-    df_aggregate.to_csv('daily_aggregate.csv', index=False)
+    df_aggregate.to_csv('.csv', index=False)
     return df_aggregate
+
+
+def sorted_data():
+    """ Does the same as make daily aggregate but without averaging"""
+
+    df = pd.read_csv('dataset_mood_smartphone.csv')
+    df['time'] = pd.to_datetime(df['time'])
+    df = df.sort_values(by=['id', 'time'], ascending = True)
+
+    df = df.pivot_table(index=['id', 'time'],
+                          columns='variable',
+                          values='value',
+                          aggfunc='first').reset_index()
+    df.columns.name = None
+    df = df.reset_index()
+    df.drop('index', axis = 1, inplace = True)
+    df.to_csv('sorted_data.csv', index=False)
 
 def average_through_ids():
     """Averge the daily values of variables through IDs"""
-    df = pd.read_csv('daily_aggregate.csv')
+    df = pd.read_csv('.csv')
     df = df.groupby('date').agg('mean').reset_index()
-    df.to_csv('daily_aggregate_avg.csv', index=False)
+    df.to_csv('_avg.csv', index=False)
     
 def normalised_data():
     """Normalise the data"""
-    df = pd.read_csv('daily_aggregate_avg.csv')
+    df = pd.read_csv('_avg.csv')
 
     date_column = df['date']
     df = df.drop(columns='date')
@@ -174,11 +191,11 @@ def normalised_data():
 
     df = (df - mean) / std
     df = pd.concat([date_column, df], axis=1)
-    df.to_csv('daily_aggregate_normalised.csv', index=False)
+    df.to_csv('_normalised.csv', index=False)
     
 def correlation_matrix():
     """Create a correlation matrix"""
-    df = pd.read_csv('daily_aggregate_normalised.csv')
+    df = pd.read_csv('_normalised.csv')
     df.drop(['date'], axis=1, inplace=True)
     corr = df.corr()
     labels = [label.replace('appCat.', '') for label in corr.columns.values]
@@ -192,7 +209,7 @@ def correlation_matrix():
     
 def box_plot_variables():
     """Create a box plot for variables"""
-    df = pd.read_csv('daily_aggregate_normalised.csv')
+    df = pd.read_csv('_normalised.csv')
     sns.set(style="whitegrid")
     plt.figure(figsize=(10, 6))
     sns.boxplot(data=df)
@@ -201,11 +218,14 @@ def box_plot_variables():
     plt.savefig('box_plot_variables.png')
 
 
+    
+
 
 if __name__ == '__main__':
     #wide_df = prepare_data_for_correlation(df)
     #wide_df.to_csv('wide_df.csv', index=False)
     #create_correlation_matrix(wide_df)
+    #sorted_data()
     #average_through_ids()
     normalised_data()
     correlation_matrix()

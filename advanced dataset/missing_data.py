@@ -1,28 +1,31 @@
 """ This file contains the function for making the prediction models"""
 
+
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from scipy.linalg import svd
 
 import matplotlib.pyplot as plt
 
 from sklearn import datasets, model_selection
+from models.missing_data_functions import forward_filling, moving_average, average, interpolation
 
 
 
 
 class Missing_data():
 
-
     def __init__(self, df):
         """
 
-        This class is made for missing the missing values of the data
+        This class is made for missing the missing values of the data. 
 
         Inputs:
 
-            - df: Dataframe
+            - df: Dataframe,Assumes that dataset is ordered by time and of the form:
+                id,date,variables columns
 
         Variables:
 
@@ -30,80 +33,94 @@ class Missing_data():
 
             - df_or: Copy of the original Dataframe
         """
-        
-        df = pd.read_csv('../DMT-1/dataset_mood_smartphone.csv')
-        df = df.drop('Unnamed: 0', axis = 1)
-        df['date'] = pd.to_datetime(df['time'])
-        
+
         self.df = df
         self.df_or = df.copy()
         self.nan_var = None
         self.nan_count = None
 
         self.ids = self.df['id'].unique() 
-        self.time = self.df['time'].unique() 
-        self.variables = self.df['variable'].unique() 
+        self.date = self.df['date'].unique() 
+
+        self.mapping = {
+            'average': average,
+            'moving average': moving_average,
+            'interpolation': interpolation,
+            'forward filling': forward_filling,
+        }
 
 
     def nan_finder(self):
         """ 
-        Given the data frame, returns the variables with NaN values and the number of Nan Values
+        Given the data frame, returns the variables with NaN values, the number of NaN Values and it's index
         """
         
-        self.nan_var = self.df[self.df.isna().any(axis=1)]['variable'].unique()
+        self.nan_var = self.df.columns[self.df.isnull().any()].tolist()
         self.nan_count = self.df.isna().sum().sum()
-        self.nan_indices = self.df.index[df['value'].isna()]
+        self.nan_positions = np.where(pd.isnull(df))
+        self.nan_indices = [[self.df.index[self.nan_positions[1]].tolist()],self.df.columns[self.nan_positions[1]].tolist()]
 
-
-
-    def moving_average(self):
-        """ 
-
-        Given the data frame, fills the columns that are empty with the ID moving average
+    def fill_missing(self, mode = 'average', info = True):
         """
-        self.nan_finder()  
-
-        for i_d in self.ids:
-            for var in self.nan_var:
-                data = df[(df['id'] == i_d) & (df['variable'] == var)]['value']
-                
-                nan_index = data.index[data.isna()]
-        
-                nan_positions = np.where(data.isna())
-                
-                for i,pos in enumerate(nan_positions[0]):
-                    mean = data[:pos].mean()
-                    self.df.loc[nan_index[i],'value'] = mean
-        
-        miss_df.nan_finder()
-        miss_df.df.loc[miss_df.nan_indices[0],'value'] = 0
-
-    def plot(self,var):
-        """
-        PLots the evolution of a dataset overtime of one variable.
+        Fills the missing values with a specified method.
         Inputs:
-            - Variable: Variable to plot
+        - mode: mode for filling, string of:average_mode, moving_average, interpolation
         """
+        self.nan_finder()
+        initial_nan = self.nan_count
+        method = self.mapping.get(mode)
+        
+        if self.nan_count == 0:
+            print("The dataset is already full")
+        else:
+            self.df = method(self.df_or)
+            self.nan_finder()
+            print(f"Filled {initial_nan - self.nan_count} values and {self.nan_count} values are still missing")
+            
+            if info == True:
+                print("ORIGINAL UNFILLED DATA")
+                print(self.df_or.isna().sum())
+                print("UNFILLED DATA")
+                print(self.df.isna().sum())
+                self.plot_missing(mode)
 
-        plt.figure(figsize=(10, 6))
-        for id_ in self.ids:
-            
-            data_id = self.df[self.df['id'] == id_]
-            
+    def plot_missing(self,mode):
+            """ 
+            Saves tow figures, one of teh original dataset missing data, and one of the old dataset missing data
+            """
 
-            plt.plot(data_id[data_id['variable'] == var]['date'], data_id[data_id['variable'] == var]['value'], label=f'ID {id_}')
-    
-        plt.title(f'{var} Over Time')
-        plt.xlabel('Time')
-        plt.ylabel('Values')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+            unfilled = self.df.groupby('id').apply(lambda x: x.iloc[:, 1:].isna().sum())
+            filled = self.df.groupby('id').apply(lambda x: x.iloc[:, 1:].notna().sum())
+
+            unfilled = unfilled/(filled + unfilled)
             
+            unfilled_or = self.df_or.groupby('id').apply(lambda x: x.iloc[:, 1:].isna().sum())
+            filled_or = self.df_or.groupby('id').apply(lambda x: x.iloc[:, 1:].notna().sum())
+            unfilled_or = unfilled_or/(filled_or + unfilled_or)
+
+
+            plt.figure(figsize=(15, 15))
+            sns.heatmap(unfilled, annot=True, fmt=".2f", cmap='coolwarm',
+                        xticklabels=unfilled.columns.values,
+                        yticklabels=unfilled.index)
+
+            plt.tight_layout()
+            plt.grid(True)
+            plt.savefig(f'advanced dataset/images/new_filled_with_{mode}.png')
+
+            plt.figure(figsize=(15, 15))
+
+            sns.heatmap(unfilled_or, annot=True, fmt=".2f", cmap='coolwarm',
+                        xticklabels=unfilled.columns.values,
+                        yticklabels=unfilled.index)
+
+            plt.tight_layout()
+            plt.grid(True)
+            plt.savefig('advanced dataset/images/old_filled.png')
+
 
     def reset(self):
         """
-
         Resets the current dataframe to its original form, without filled missed values
         """
 
@@ -123,26 +140,23 @@ class Missing_data():
             - reset: Once saved, resets the current dataframe to it's original form, default is True
         """
         
-        self.df.to_csv(name, index = False)
+        self.df.to_csv(f"advanced dataset/data/{name}", index = False)
         
-
         if reset == True:
             self.reset()
 
 
+
+
+
 if __name__ == '__main__':
 
-    df = pd.read_csv('../DMT-1/dataset_mood_smartphone.csv')
-    df = df.drop('Unnamed: 0', axis = 1)
-    df[['day', 'time']] = df['time'].str.split(' ', expand=True)
- 
+    df = pd.read_csv('../DMT-1/daily_aggregate.csv')
 
-    miss_df = Missing_data(df)
+    mis_df = Missing_data(df)
+    mis_df.fill_missing(mode = 'average', info= True)
 
-    miss_df.moving_average()
 
-    print(miss_df.df)
-    miss_df.plot('circumplex.arousal')
 
     
 

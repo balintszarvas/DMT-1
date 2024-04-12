@@ -1,1 +1,1 @@
-isna().sum().sum()
+nan_count
