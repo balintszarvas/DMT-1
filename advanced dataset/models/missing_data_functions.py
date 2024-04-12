@@ -21,44 +21,29 @@ def forward_filling(df_or):
 
     return df
 
-def moving_average(df_or):
-    """ 
-    Given the data frame, fills the columns that are empty with the moving average, and then with the average
-    """
-    df = df_or.copy()
-    
-    for i_d in self.ids:
-        data = df[(df['id'] == i_d)]
-        cumulative_means = data.expanding().mean()
-        data = data.fillna(cumulative_means)
-        print(data)
-        df.loc[df['id'] == i_d] = data
-      
-    df = average(df)
-
-    return df
 
 def average(df_or):
     """
     Fills the missing values by the average of all values on that day, then average of id and the extra missing values by the total average
     """
     df = df_or.copy()
-    print(df["appCat.unknown"])
+    df["appCat.unknown"] = pd.to_numeric(df["appCat.unknown"], errors='coerce')
+    
+    
     date_means = df.groupby('date').mean(numeric_only = True)
-    id_means = df.groupby('id').mean(numeric_only = True)
     columns_to_fill = df.select_dtypes(include=[np.number]).columns.tolist()
 
     for col in columns_to_fill:
         nan_indices = df[col].isna()
         df.loc[nan_indices, col] = df.loc[nan_indices, 'date'].map(date_means[col])
     
+    id_means = df.groupby('id').mean(numeric_only = True)
     columns_to_fill = df.select_dtypes(include=[np.number]).columns.tolist()
+
     for col in columns_to_fill:
         nan_indices = df[col].isna()
         df.loc[nan_indices, col] = df.loc[nan_indices, 'id'].map(id_means[col])
 
-
-    print(df)
     df = df.fillna(df.mean(numeric_only= True))
 
     return df

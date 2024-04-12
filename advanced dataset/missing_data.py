@@ -10,7 +10,7 @@ from scipy.linalg import svd
 import matplotlib.pyplot as plt
 
 from sklearn import datasets, model_selection
-from models.missing_data_functions import forward_filling, moving_average, average, interpolation
+from models.missing_data_functions import forward_filling, average, interpolation
 
 
 
