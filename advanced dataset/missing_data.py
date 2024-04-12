@@ -44,7 +44,6 @@ class Missing_data():
 
         self.mapping = {
             'average': average,
-            'moving average': moving_average,
             'interpolation': interpolation,
             'forward filling': forward_filling,
         }
@@ -154,7 +153,7 @@ if __name__ == '__main__':
     df = pd.read_csv('../DMT-1/daily_aggregate.csv')
 
     mis_df = Missing_data(df)
-    mis_df.fill_missing(mode = 'average', info= True)
+    mis_df.fill_missing(mode = 'forward filling', info= True)
 
 
 

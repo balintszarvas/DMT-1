@@ -10,17 +10,18 @@ import pandas as pd
 
 def forward_filling(df_or):
     """
-    Does forward filling and then backward filling. Lastly, the missing values are filled with the average
+    Does forward filling and then backward filling only for values that have neighbors
     """
     df = df_or.copy()
     
-    df_filled = df.groupby('id').ffill().bfill()
+    df_filled = df.groupby('id').ffill(limit = 1).bfill(limit = 1)
     common_columns = df.columns.intersection(df_filled.columns)
     
     df[common_columns] = df_filled
 
-    return df
+    df = average(df)
 
+    return df
 
 def average(df_or):
     """
@@ -48,6 +49,11 @@ def average(df_or):
 
     return df
 
-def interpolation(df):
+def interpolation(df_or):
     df = df_or.copy()
+    ids = df['id'].unique()
+    for id_ in ids:
+        data = df[df['id'] == id_]
+
+
     return None
