@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from os import path, makedirs
 import csv
+from statsmodels.tsa.seasonal import seasonal_decompose
 
 file_path = "dataset_mood_smartphone.csv"
 df = pd.read_csv(file_path)
@@ -100,14 +101,15 @@ def plot_mood_over_time():
 def plot_mood_over_time_comparison():
     """Plot the mood over time in the dataset, comparing minute-level data to daily averages."""
     # Filter for 'mood' variable
+    
     df_mood = df[df['variable'] == 'mood']
     df_mood['time'] = pd.to_datetime(df_mood['time'])
-
+    
     # Plotting mood values for each timestamp
     df_minute_avg = df_mood.groupby(['time']).agg({'value': 'mean'}).reset_index()
     plt.figure(figsize=(10, 8))
     plt.plot(df_minute_avg['time'], df_minute_avg['value'], label='Mood over Time')
-
+    
     # Computing daily average of mood values
     df_mood['date'] = df_mood['time'].dt.date
     df_daily_avg = df_mood.groupby(['date']).agg({'value': 'mean'}).reset_index()
@@ -160,20 +162,27 @@ def average_through_ids():
     df.to_csv('daily_aggregate_avg.csv', index=False)
     
 def normalised_data():
-    """Normalise the data"""
-    df = pd.read_csv('daily_aggregate_avg.csv')
+    """Normalize the data"""
+    # Read the dataset
+    df = pd.read_csv('daily_aggregate.csv')
 
-    date_column = df['date']
-    df = df.drop(columns='date')
+    # Exclude 'id' and 'date' columns
+    df = df.drop(columns=['id', 'date'])
 
+    # Replace empty strings with NaN
     df.replace("", np.nan, inplace=True)
-    df.fillna(df.mean(), inplace=True)
 
-    mean = df.mean()
-    std = df.std()
+    # Calculate mean and standard deviation for each column excluding NaN values
+    mean = df.mean(skipna=True)
+    std = df.std(skipna=True)
 
+    # Normalize the existing values
     df = (df - mean) / std
-    df = pd.concat([date_column, df], axis=1)
+
+    # Add back the 'date' column
+    df = pd.concat([df], axis=1)
+
+    # Save the normalized dataset
     df.to_csv('daily_aggregate_normalised.csv', index=False)
     
 def correlation_matrix():
@@ -184,9 +193,9 @@ def correlation_matrix():
     labels = [label.replace('appCat.', '') for label in corr.columns.values]
 
     plt.figure(figsize=(10, 8))
-    sns.heatmap(corr, fmt=".2f", cmap='coolwarm',
+    sns.heatmap(corr, annot = True,  fmt=".2f", cmap='coolwarm',
                 xticklabels=labels,
-                yticklabels=labels)
+                yticklabels=labels, annot_kws={"size": 10})
     plt.tight_layout()
     plt.savefig('correlation_matrix_normalised.png')
     
@@ -198,7 +207,56 @@ def box_plot_variables():
     sns.boxplot(data=df)
     plt.xticks(rotation=90)  
     plt.tight_layout()
+    print('ola')
     plt.savefig('box_plot_variables.png')
+
+def variables_distribution_plot():
+    """Create a distribution plot for variables"""
+    df = pd.read_csv('daily_aggregate_normalised.csv')
+    df.drop(['date'], axis=1, inplace=True)
+    df = pd.melt(df)
+    sns.set(style="whitegrid")
+    plt.figure(figsize=(10, 6))
+    sns.violinplot(x='variable', y='value', data=df)
+    plt.xticks(rotation=90)  
+    plt.tight_layout()
+    plt.savefig('variables_distribution_plot.png')
+    
+
+def important_distribution_plot():
+    """Create a distribution plot for mood"""
+    df = pd.read_csv('daily_aggregate_normalised.csv')
+    df.drop(['date'], axis=1, inplace=True)
+    sns.set(style="whitegrid")
+    important = ['mood', 'circumplex.valence', 'activity', 'appCat.communication', 'call', 'screen']
+    for i in important:
+        plt.figure(figsize=(10, 6))
+        sns.violinplot(x=i, data=df)
+        plt.grid(True, which='both')  
+        plt.ylabel('Density') 
+        plt.tight_layout()
+        plt.savefig(f'{i}_distribution_plot.png')
+
+def plot_range_hours_ID(df):
+    df['time'] = pd.to_datetime(df['time'])
+    
+    plt.figure()
+    plt.title('Scatter plot for all IDs')
+    plt.xlabel('ID')
+    plt.ylabel('Hour')
+    plt.xticks(rotation=45)  
+    
+    unique_ids = df['id'].unique()
+    for id in unique_ids:
+        id_data = df[df['id'] == id]
+        hours = id_data['time'].dt.strftime('%H:%M')
+        plt.scatter([id] * len(hours), hours)
+    
+    # Manually set y-axis tick locations and labels every hour
+    y_ticks = pd.date_range(start='00:00', end='23:59', freq='1H').strftime('%H:%M')
+    plt.yticks(y_ticks)
+    
+    plt.show()
 
 
 
@@ -206,7 +264,10 @@ if __name__ == '__main__':
     #wide_df = prepare_data_for_correlation(df)
     #wide_df.to_csv('wide_df.csv', index=False)
     #create_correlation_matrix(wide_df)
+    plot_mood_over_time_comparison()
     #average_through_ids()
-    normalised_data()
-    correlation_matrix()
-    box_plot_variables()
+    #normalised_data()
+    #correlation_matrix()
+    #box_plot_variables()
+    #variables_distribution_plot()
+    #important_distribution_plot()
