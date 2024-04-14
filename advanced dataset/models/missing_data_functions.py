@@ -10,7 +10,8 @@ import pandas as pd
 
 def forward_filling(df_or):
     """
-    Does forward filling and then backward filling only for values that have neighbors
+    Does forward filling and then backward filling only for values that have neighbors.
+    If there are any extra missing, it computes the average
     """
     df = df_or.copy()
     
@@ -50,10 +51,18 @@ def average(df_or):
     return df
 
 def interpolation(df_or):
+    """
+    Does linear interpolations, values that are not interpolated then are approximated with the average
+    """
     df = df_or.copy()
+    df["appCat.unknown"] = pd.to_numeric(df["appCat.unknown"], errors='coerce')
     ids = df['id'].unique()
+    
     for id_ in ids:
         data = df[df['id'] == id_]
-
-
-    return None
+        data.set_index('date', inplace=True)
+        interpolated_data = data.select_dtypes(include=[np.number]).interpolate(method = 'linear')
+        df.loc[df['id'] == id_, interpolated_data.columns] = interpolated_data.values
+    
+    df = average(df)
+    return df
