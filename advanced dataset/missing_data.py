@@ -33,7 +33,7 @@ class Missing_data():
 
             - df_or: Copy of the original Dataframe
         """
-
+        df['date'] = pd.to_datetime(df['date'])
         self.df = df
         self.df_or = df.copy()
         self.nan_var = None
@@ -146,14 +146,14 @@ class Missing_data():
 
 
 
-
-
 if __name__ == '__main__':
 
     df = pd.read_csv('../DMT-1/daily_aggregate.csv')
-
     mis_df = Missing_data(df)
-    mis_df.fill_missing(mode = 'forward filling', info= True)
+    mis_df.fill_missing(mode = 'interpolation', info= True)
+    mis_df.save('train.csv')
+
+
 
 
 
