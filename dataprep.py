@@ -10,6 +10,10 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
 from scipy.stats import chi2
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import LSTM
+
 
 positive_variables = [
     'mood',
@@ -451,6 +455,28 @@ def remove_outliers_bystdev(df_path='daily_aggregate_imputed.csv', save_path='da
     
     df_inliers = df[~outliers_mask].copy()
     df_inliers.to_csv(save_path, index=False)
+
+def run_classification():
+    df = pd.read_csv('daily_aggregate_no_outliers.csv')
+    df.drop(['id', 'day', 'month'], axis=1, inplace=True)
+    
+    # Split the data into training and testing sets
+    train_size = int(0.8 * df.shape[0])
+    df_train = df.iloc[:train_size, :]
+    df_test = df.iloc[train_size:, :]
+    
+    # Prepare the data for the LSTM model
+    n_steps = 3
+    X_train, y_train = prepare_data_for_lstm(df_train, n_steps)
+    X_test, y_test = prepare_data_for_lstm(df_test, n_steps)
+    
+    # Create and train the LSTM model
+    model = create_lstm_model(n_steps, X_train.shape[2])
+    model.fit(X_train, y_train, epochs=100, batch_size=32, verbose=2)
+    
+    # Evaluate the model
+    loss = model.evaluate(X_test, y_test)
+    print(f'Model loss: {loss}')
 
 
 if __name__ == '__main__':
