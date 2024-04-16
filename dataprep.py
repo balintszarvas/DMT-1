@@ -265,17 +265,23 @@ def standardise_data():
     """Normalise the data"""
     df = pd.read_csv('daily_aggregate_imputed.csv')
 
-    date_column = df['date']
-    df = df.drop(columns='date')
+    # Exclude 'id' and 'date' columns
+    df = df.drop(columns=['id', 'date'])
 
+    # Replace empty strings with NaN
     df.replace("", np.nan, inplace=True)
-    df.fillna(df.mean(), inplace=True)
 
-    mean = df.mean()
-    std = df.std()
+    # Calculate mean and standard deviation for each column excluding NaN values
+    mean = df.mean(skipna=True)
+    std = df.std(skipna=True)
 
+    # Normalize the existing values
     df = (df - mean) / std
-    df = pd.concat([date_column, df], axis=1)
+
+    # Add back the 'date' column
+    df = pd.concat([df], axis=1)
+
+    # Save the normalized dataset
     df.to_csv('daily_aggregate_normalised.csv', index=False)
 
 def normalise_data(df):
@@ -362,9 +368,9 @@ def correlation_matrix():
     labels = [label.replace('appCat.', '') for label in corr.columns.values]
 
     plt.figure(figsize=(10, 8))
-    sns.heatmap(corr, fmt=".2f", cmap='coolwarm',
+    sns.heatmap(corr, annot = True,  fmt=".2f", cmap='coolwarm',
                 xticklabels=labels,
-                yticklabels=labels)
+                yticklabels=labels, annot_kws={"size": 10})
     plt.tight_layout()
     plt.savefig('correlation_matrix_normalised.png')
     
@@ -376,6 +382,7 @@ def box_plot_variables():
     sns.boxplot(data=df)
     plt.xticks(rotation=90)  
     plt.tight_layout()
+    print('ola')
     plt.savefig('box_plot_variables.png')
 
 def convert_date_to_day_and_month(df):
