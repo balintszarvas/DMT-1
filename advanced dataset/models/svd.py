@@ -42,6 +42,7 @@ def svd(df, keep = 0.9):
 
     df.drop(columns=['date', 'id'], inplace = True)
     df = df.apply(pd.to_numeric, errors='coerce')
+    
     U, s, Vt = np.linalg.svd(df, full_matrices=False)
     
     total_s_squared = np.sum(s**2)
