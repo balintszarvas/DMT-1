@@ -6,13 +6,14 @@ from os import path, makedirs
 import csv
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import IsolationForest
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, accuracy_score
 from scipy.stats import chi2
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import LSTM
+from keras.models import Sequential, load_model, save_model
+from keras.layers import Dense, LSTM
+from kerastuner.tuners import Hyperband
 
 
 positive_variables = [
@@ -108,6 +109,7 @@ def aggragete_boolenas_per_day_per_id(df, variables):
 def count_nan_values(df):
     """Count the number of NaN values in the dataset"""
     nan_values = df.isna().sum()
+    print(nan_values)
     return nan_values
 
 def get_earliest_screen_timeentry_perday():
@@ -456,30 +458,188 @@ def remove_outliers_bystdev(df_path='daily_aggregate_imputed.csv', save_path='da
     df_inliers = df[~outliers_mask].copy()
     df_inliers.to_csv(save_path, index=False)
 
-def run_classification():
-    df = pd.read_csv('daily_aggregate_no_outliers.csv')
-    df.drop(['id', 'day', 'month'], axis=1, inplace=True)
-    
-    # Split the data into training and testing sets
-    train_size = int(0.8 * df.shape[0])
-    df_train = df.iloc[:train_size, :]
-    df_test = df.iloc[train_size:, :]
-    
-    # Prepare the data for the LSTM model
-    n_steps = 3
-    X_train, y_train = prepare_data_for_lstm(df_train, n_steps)
-    X_test, y_test = prepare_data_for_lstm(df_test, n_steps)
-    
-    # Create and train the LSTM model
-    model = create_lstm_model(n_steps, X_train.shape[2])
-    model.fit(X_train, y_train, epochs=100, batch_size=32, verbose=2)
-    
-    # Evaluate the model
-    loss = model.evaluate(X_test, y_test)
-    print(f'Model loss: {loss}')
+def create_sequences(data,feature_columns, n_steps=5):
+    X, y = [], []
+    unique_ids = data['id'].unique()
 
+    if feature_columns is None:
+        feature_columns = data.columns.difference(['id', 'mood'])
+
+    for id_val in unique_ids:
+        id_data = data[data['id'] == id_val]
+
+        id_data = id_data.sort_values(by=['day', 'month'])
+
+        for i in range(len(id_data) - n_steps):
+            X.append(id_data.iloc[i:i+n_steps][feature_columns].values)
+            y.append(id_data.iloc[i + n_steps]['mood'])
+    
+    return np.array(X), np.array(y)
+
+
+def train_LSTM_regressor(X_train, y_train, epochs=1):
+    model = Sequential([
+        LSTM(100, activation='tanh', return_sequences=False, input_shape=(X_train.shape[1], X_train.shape[2])),
+        Dense(1)
+    ])
+    model.compile(optimizer='adam', loss='mse')
+
+    seqno = 1
+
+    for sequence, target in zip(X_train, y_train):
+        batch_size = len(sequence)
+        
+        sequence = np.expand_dims(sequence, axis=0)
+        target = np.expand_dims(target, axis=0)
+
+        print(f"Training for sequence: {seqno}")
+        seqno += 1
+        model.fit(sequence, target, epochs=epochs, batch_size=batch_size, verbose=0, shuffle=False)
+    
+    return model
+
+def train_LSTM_classifier(X_train, y_train, epochs=1):
+    model = Sequential([
+        LSTM(100, activation='tanh', return_sequences=False, input_shape=(X_train.shape[1], X_train.shape[2])),
+        Dense(10, activation='softmax')
+    ])
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+    seqno = 1
+
+    for sequence, target in zip(X_train, y_train):
+        batch_size = len(sequence)
+        
+        sequence = np.expand_dims(sequence, axis=0)
+        target = np.expand_dims(target, axis=0)
+
+        print(f"Training for sequence: {seqno}")
+        seqno += 1
+        model.fit(sequence, target, epochs=epochs, batch_size=batch_size, verbose=0, shuffle=False)
+    
+    return model
+
+
+
+def load_and_preprocess_data(filepath, type):
+    df = pd.read_csv(filepath)
+
+    if type == 'classification':
+        df['mood'] = df['mood'].round(0).astype(int)
+    
+    train_data = []
+    test_data = []
+
+    for id_val in df['id'].unique():
+        id_data = df[df['id'] == id_val]
+        id_data = id_data.sort_values(by=['month', 'day'])
+
+        train_size = int(0.8 * len(id_data))
+        train_id_data = id_data.iloc[:train_size]
+        test_id_data = id_data.iloc[train_size:]
+        
+        train_data.append(train_id_data)
+        test_data.append(test_id_data)
+
+    train_data = pd.concat(train_data, ignore_index=True)
+    test_data = pd.concat(test_data, ignore_index=True)
+
+    return train_data, test_data
+
+def run_LSTM(feature_columns, type, filepath='daily_aggregate_imputed.csv'):
+    train_data, test_data = load_and_preprocess_data(filepath, type)
+    
+    X_train, y_train = create_sequences(train_data, feature_columns)
+    X_test, y_test = create_sequences(test_data, feature_columns)
+
+    print(X_train)
+    if type == 'classification':
+        model = train_LSTM_classifier(X_train, y_train)
+        y_pred = lstm_classification_prediction(model, X_test)
+    elif type == 'regression':
+        model = train_LSTM_regressor(X_train, y_train)
+        y_pred = lstm_regression_prediction(model, X_test)
+
+    model.save(f'lstm_{type}_2epoch.keras')
+    
+    mse = model.evaluate(X_test, y_test, verbose=0)
+    print(f"Test MSE: {mse}")
+
+    plotpredictions(y_pred, y_test, type)
+
+def lstm_regression_prediction(model, Xtest):
+    y_pred = model.predict(Xtest)
+    return y_pred.flatten()
+
+def lstm_classification_prediction(model, Xtest):
+    y_pred = model.predict(Xtest)
+    return y_pred.argmax(axis=1)
+
+def plotpredictions(y_pred, y_test, type):
+    plt.figure(figsize=(10, 6))
+    if type == 'RandomForestClassifier':
+        plt.scatter(range(len(y_test)), y_test, color='blue', label='True Mood', alpha=0.5, edgecolors='w')
+        plt.scatter(range(len(y_pred)), y_pred, color='red', label='Predicted Mood', alpha=0.5, edgecolors='w')
+    else:
+        plt.plot(y_test, label='True Mood', color='blue')
+        plt.plot(y_pred, label='Predicted Mood', color='red')
+    plt.legend()
+    plt.grid()
+    plt.title('True vs Predicted Mood')
+    plt.savefig(f'{type}_true_vs_predicted_mood.png')
+
+def create_features(df, feature_columns, n_lags=5):
+    """Extend DataFrame with lagged features of interest."""
+    lagged_df = pd.DataFrame()
+    for column in feature_columns:
+        for lag in range(1, n_lags + 1):
+            lagged_df[f'{column}_lag{lag}'] = df[column].shift(lag)
+    lagged_df['mood'] = df['mood']
+    lagged_df.dropna(inplace=True)
+    return lagged_df[lagged_df.columns.difference(['mood'])], lagged_df['mood']
+
+def random_forest_classifier(filepath, feature_columns, n_estimators=100, random_state=42):
+    """Train a Random Forest Classifier on the dataset."""
+    df = pd.read_csv(filepath)
+
+    df['mood'] = df['mood'].round(0).astype(int)
+    
+    X, y = create_features(df, feature_columns, n_lags=5)
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_state)
+    
+    rf = RandomForestClassifier(n_estimators=n_estimators, random_state=random_state)
+    rf.fit(X_train, y_train)
+    
+    y_pred = rf.predict(X_test)
+    
+    mse = mean_squared_error(y_test, y_pred)
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"Test MSE: {mse}")
+    print(f"Test Accuracy: {accuracy}")
+
+    plotpredictions(y_pred, y_test, type='RandomForestClassifier')
+
+def build_lstm_hypermodel(X_train, y_train, hp):
+    model = Sequential()
+    model.add(LSTM(
+        units=hp.Int('units', min_value=32, max_value=512, step=32),
+        activation='tanh',
+        input_shape=(X_train.shape[1], X_train.shape[2]),
+        return_sequences=False
+    ))
+    model.add(Dense(
+        10, activation='softmax'
+    ))
+    model.compile(
+        optimizer='adam',
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy']
+    )
+    return model
 
 if __name__ == '__main__':
+    feature_columns = ['activity', 'appCat.office', 'appCat.other', 'appCat.social', 'appCat.weather', 'circumplex.valence']
     #wide_df = prepare_data_for_correlation(df)
     #wide_df.to_csv('wide_df.csv', index=False)
     #create_correlation_matrix(wide_df)
@@ -495,4 +655,6 @@ if __name__ == '__main__':
     #make_daily_aggregate_csv()
     #print(count_noofday_per_id())
     #plot_dailyavg_variable_distribution('mood')
-    remove_outliers_forest()
+    #remove_outliers_forest()
+    #run_LSTM(feature_columns, type='classification', filepath='daily_aggregate_imputed.csv')
+    random_forest_classifier('clean_data_with_columns.csv', feature_columns)
